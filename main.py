@@ -74,6 +74,13 @@ while True:
         bottom *= 4
         left *= 4
 
+        if id!="Unknown" and (id not in detected_ids or int(time.time())-detected_ids[id]>60):
+            detected_ids.update({id: int(time.time())})
+            print(f"{datetime.datetime.now()}: detected", id)
+            cv2.imwrite(f"training/{id}.jpg", frame[top:bottom, left:right])
+            resp = requests.post("https://api.ccit4080.tylerl.cyou/student/checkin", json={"student_id": int(id)})
+            print(resp.text)
+
         # Draw a box around the face
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
 
@@ -81,13 +88,6 @@ while True:
         cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
         font = cv2.FONT_HERSHEY_DUPLEX
         cv2.putText(frame, id, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
-
-        if id!="Unknown" and id not in detected_ids or int(time.time())-detected_ids[id]>60:
-            detected_ids.update({id: int(time.time())})
-            print(f"{datetime.datetime.now()}: detected", id)
-            resp = requests.post("https://api.ccit4080.tylerl.cyou/student/checkin", json={"student_id": int(id)})
-            print(resp.text)
-
 
     # Display the resulting image
     cv2.imshow('Video', frame)
