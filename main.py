@@ -2,13 +2,17 @@ import face_recognition
 import cv2
 import numpy as np
 import os
+import requests
+import time
+import datetime
         
 # Get a reference to webcam #1
 video_capture = cv2.VideoCapture(1)
 
 training_face_encodings = []
 training_face_ids = []
-# Load a sample picture and learn how to recognize it.
+
+# Load pictures from the training folder
 for file in os.listdir("training"):
     if file.endswith(".jpg"):
         img = face_recognition.load_image_file(f"training/{file}")
@@ -21,14 +25,15 @@ print(f'Training ids: {training_face_ids}')
 face_locations = []
 face_encodings = []
 face_names = []
-process_this_frame = True
+frame_count = 0
+detected_ids = {}
 
 while True:
     # Grab a single frame of video
     ret, frame = video_capture.read()
 
-    # Only process every other frame of video to save time
-    if process_this_frame:
+    # Only process every 30 frames of video
+    if frame_count == 0:
         # Resize frame of video to 1/4 size for faster face recognition processing
         small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
 
@@ -39,30 +44,30 @@ while True:
         face_locations = face_recognition.face_locations(rgb_small_frame)
         face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
-        face_names = []
+        face_ids = []
         for face_encoding in face_encodings:
             # See if the face is a match for the known face(s)
             matches = face_recognition.compare_faces(training_face_encodings, face_encoding)
-            name = "Unknown"
+            id = "Unknown"
 
             # # If a match was found in known_face_encodings, just use the first one.
             # if True in matches:
             #     first_match_index = matches.index(True)
-            #     name = known_face_names[first_match_index]
+            #     name = training_face_ids[first_match_index]
 
             # Or instead, use the known face with the smallest distance to the new face
             face_distances = face_recognition.face_distance(training_face_encodings, face_encoding)
             best_match_index = np.argmin(face_distances)
             if matches[best_match_index]:
-                name = training_face_ids[best_match_index]
+                id = training_face_ids[best_match_index]
 
-            face_names.append(name)
+            face_ids.append(id)
 
-    process_this_frame = not process_this_frame
+    frame_count = (frame_count+1)%30
 
 
     # Display the results
-    for (top, right, bottom, left), name in zip(face_locations, face_names):
+    for (top, right, bottom, left), id in zip(face_locations, face_ids):
         # Scale back up face locations since the frame we detected in was scaled to 1/4 size
         top *= 4
         right *= 4
@@ -75,7 +80,14 @@ while True:
         # Draw a label with a name below the face
         cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
         font = cv2.FONT_HERSHEY_DUPLEX
-        cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+        cv2.putText(frame, id, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+
+        if id!="Unknown" and id not in detected_ids or int(time.time())-detected_ids[id]>60:
+            detected_ids.update({id: int(time.time())})
+            print(f"{datetime.datetime.now()}: detected", id)
+            resp = requests.post("https://api.ccit4080.tylerl.cyou/student/checkin", json={"student_id": int(id)})
+            print(resp.text)
+
 
     # Display the resulting image
     cv2.imshow('Video', frame)
